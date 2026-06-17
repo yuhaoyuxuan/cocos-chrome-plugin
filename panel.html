@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Cocos</title>
+    <link rel="stylesheet" href="/src/panel/panel.css" />
+  </head>
+  <body>
+    <!-- 顶部工具条：刷新按钮 + 搜索框 + 轮询控制 + 状态信息 -->
+    <header class="toolbar">
+      <button id="refresh" class="btn" title="重新读取 (R)">
+        <span class="icon-refresh">⟳</span> 刷新
+      </button>
+      <input
+        id="search"
+        class="search-box"
+        type="search"
+        placeholder="搜索…"
+        spellcheck="false"
+        autocomplete="off"
+      />
+      <span class="poll-group" title="定时轮询刷新">
+        <label class="check-row poll-toggle">
+          <input id="poll-enable" type="checkbox" />
+          <span class="check-label">轮询</span>
+        </label>
+        <select id="poll-interval" class="select-input poll-select" disabled>
+          <option value="500">0.5s</option>
+          <option value="1000" selected>1s</option>
+          <option value="2000">2s</option>
+          <option value="5000">5s</option>
+        </select>
+      </span>
+      <span id="status" class="status">就绪</span>
+      <span id="count" class="count" hidden></span>
+    </header>
+
+    <!-- Tab 切换条 -->
+    <nav class="tab-bar">
+      <button class="tab active" data-tab="nodes">节点树</button>
+      <button class="tab" data-tab="assets">资源缓存</button>
+    </nav>
+
+    <!-- 视图：节点树 -->
+    <main id="view-nodes" class="layout view active">
+      <section id="left" class="pane tree-pane">
+        <div id="tree" class="tree" aria-label="Cocos 节点树">
+          <div class="placeholder">点击「刷新」读取当前场景…</div>
+        </div>
+      </section>
+      <div id="splitter" class="splitter" title="拖拽调整宽度"></div>
+      <aside id="right" class="pane details-pane">
+        <div id="details" class="details">
+          <div class="placeholder">在左侧树中选择一个节点以查看详情</div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- 视图：资源缓存 -->
+    <main id="view-assets" class="layout view">
+      <section class="pane tree-pane assets-tree-pane">
+        <div class="assets-subbar">
+          <span class="subbar-label">分组：</span>
+          <button class="seg active" data-groupby="type">类型</button>
+          <button class="seg" data-groupby="bundle">Bundle</button>
+        </div>
+        <div id="assets-tree" class="tree" aria-label="资源缓存">
+          <div class="placeholder">点击「刷新」读取资源缓存…</div>
+        </div>
+      </section>
+      <div id="assets-splitter" class="splitter" title="拖拽调整宽度"></div>
+      <aside class="pane details-pane">
+        <div id="asset-details" class="details">
+          <div class="placeholder">在左侧选择一个资源查看详情</div>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/panel/panel.ts"></script>
+  </body>
+</html>

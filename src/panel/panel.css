@@ -1,0 +1,834 @@
+/* ===== Cocos DevTools 面板样式（深色主题，贴合 Chrome DevTools） ===== */
+
+:root {
+  --bg: #1e1e1e;
+  --bg-alt: #252526;
+  --bg-hover: #2a2d2e;
+  --bg-selected: #04395e;
+  --bg-selected-inactive: #2d4b5f;
+  --fg: #cccccc;
+  --fg-dim: #8a8a8a;
+  --accent: #4fc3f7;
+  --error: #f48771;
+  --ok: #89d185;
+  --warn: #e2c08d;
+  --border: #3c3c3c;
+  --row-h: 22px;
+  --split: 45%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ===== 顶部工具条 ===== */
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ===== Tab 切换条 ===== */
+.tab-bar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0;
+  padding: 0 10px;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  background: transparent;
+  color: var(--fg-dim);
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ===== 视图切换 ===== */
+/* 视图切换：用 .view.layout 组合选择器，特异性高于单独的 .layout，
+   确保 display:none 能压过 .layout 的 display:flex */
+.view {
+  flex: 1 1 auto;
+}
+
+.view.layout {
+  display: none;
+}
+
+.view.layout.active {
+  display: flex;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #3a3d3d;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.btn:active:not(:disabled) {
+  background: #333;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.icon-refresh {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 搜索框 */
+.search-box {
+  flex: 1 1 auto;
+  max-width: 280px;
+  background: #2d2d2d;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
+}
+
+.search-box:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+/* 轮询控件组 */
+.poll-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.poll-toggle {
+  cursor: pointer;
+}
+
+.poll-toggle input[type='checkbox'] {
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.poll-select {
+  min-width: 60px;
+  padding: 2px 4px;
+}
+
+.poll-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.status[data-tone='ok'] {
+  color: var(--ok);
+}
+
+.status[data-tone='error'] {
+  color: var(--error);
+}
+
+.count {
+  margin-left: auto;
+  color: var(--fg-dim);
+  background: #333;
+  border-radius: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* ===== 左右分栏布局 ===== */
+.layout {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-pane {
+  flex: 0 0 var(--split);
+  border-right: none; /* splitter 自带视觉 */
+}
+
+.details-pane {
+  flex: 1 1 auto;
+}
+
+.splitter {
+  flex: 0 0 4px;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.1s;
+}
+
+.splitter:hover,
+.splitter:active {
+  background: var(--accent);
+}
+
+/* ===== 树区域 ===== */
+.tree {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 4px 0 20px;
+}
+
+.placeholder {
+  padding: 10px 14px;
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
+/* 单个节点行 */
+.node-row {
+  display: flex;
+  align-items: center;
+  height: var(--row-h);
+  padding-right: 8px;
+  padding-left: calc(8px + var(--depth, 0) * 14px);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.node-row:hover {
+  background: var(--bg-hover);
+}
+
+.node-row.selected {
+  background: var(--bg-selected);
+  color: #fff;
+}
+
+.node-row.selected.inactive {
+  background: var(--bg-selected-inactive);
+}
+
+.node-row:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* 展开三角形 */
+.twisty {
+  flex: 0 0 auto;
+  width: 12px;
+  color: var(--fg-dim);
+  text-align: center;
+  cursor: pointer;
+}
+
+.node-row.selected .twisty {
+  color: #cfe8ff;
+}
+
+/* 节点名 */
+.node-name {
+  flex: 0 0 auto;
+  margin-right: 6px;
+}
+
+/* 子节点计数徽标 */
+.node-meta {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+/* inactive 节点置灰 */
+.node-row.inactive > .node-name {
+  color: var(--fg-dim);
+  text-decoration: line-through;
+}
+
+/* 无子节点的行的三角占位保持对齐 */
+.twisty:empty::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+}
+
+/* ===== 右栏：节点详情 ===== */
+.details {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px 14px 30px;
+  user-select: text;
+}
+
+.detail-header {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dh-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.dh-uuid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+/* active 复选框 + name 输入框 */
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.check-row input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.check-label {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #2d2d2d;
+  color: #fff;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font: inherit;
+  font-weight: bold;
+}
+
+.name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 区块标题 */
+.section-title {
+  font-size: 11px;
+  font-weight: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-dim);
+  margin: 14px 0 6px;
+}
+
+/* Inspector 行：标签 + 输入控件组 */
+.insp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.insp-label {
+  flex: 0 0 80px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 三维向量输入组 */
+.vec3 {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vec-cell {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  background: #2d2d2d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.vec-cell:focus-within {
+  border-color: var(--accent);
+}
+
+.vec-tag {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: 10px;
+}
+
+/* 数字输入框 */
+.num-input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  padding: 3px 0;
+  font: inherit;
+}
+
+.num-input:focus {
+  outline: none;
+}
+
+.num-input::-webkit-inner-spin-button,
+.num-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.layer-input {
+  flex: 0 0 80px;
+  background: #2d2d2d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+.layer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 写回失败 */
+.num-input.err,
+.name-input.err,
+.layer-input.err,
+.select-input.err {
+  border-color: var(--error) !important;
+  background: rgba(244, 135, 113, 0.1);
+}
+
+.vec-cell.err {
+  border-color: var(--error);
+}
+
+/* 下拉框 */
+.select-input {
+  flex: 0 0 auto;
+  min-width: 100px;
+  background: #2d2d2d;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 一行多复选框组 */
+.check-group {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 组件头部 enable 复选框 */
+.comp-enable {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.comp-enable input[type='checkbox'] {
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+/* 键值表 */
+.kv-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.kv-row {
+  vertical-align: top;
+}
+
+.kv-label,
+.kv-value {
+  padding: 2px 8px 2px 0;
+  border-bottom: 1px solid #2a2a2a;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.kv-label {
+  color: var(--accent);
+  white-space: nowrap;
+  font-weight: normal;
+  text-align: left;
+  padding-right: 12px;
+}
+
+.kv-value {
+  color: var(--fg);
+}
+
+.mono {
+  font-family: inherit; /* 面板已是等宽 */
+}
+
+/* 组件块 */
+.comp {
+  background: #252526;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  margin-bottom: 4px;
+}
+
+.comp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.comp-name {
+  color: var(--warn);
+  font-weight: bold;
+}
+
+.comp-props {
+  margin: 0;
+  padding: 0 8px 6px;
+}
+
+/* 组件禁用态 */
+.comp-disabled .comp-name {
+  color: var(--fg-dim);
+  text-decoration: line-through;
+}
+
+/* 徽标 */
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.badge.enabled {
+  background: #1e3a2a;
+  color: var(--ok);
+}
+
+.badge.disabled {
+  background: #3a2424;
+  color: var(--error);
+}
+
+.muted {
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: 11px;
+}
+
+.muted.compact {
+  margin: 6px 0 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/* 组件展开区 */
+.comp-body {
+  padding: 4px 8px 8px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.comp-body .insp-row {
+  padding: 2px 0;
+}
+
+/* 文本输入行（Label.string / RichText.string） */
+.text-row {
+  align-items: flex-start;
+}
+
+.text-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #2d2d2d;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.text-area:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.text-area.err {
+  border-color: var(--error);
+}
+
+/* 颜色行：拾色器 + Alpha */
+.color-row .color-picker {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.color-row .color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-row .color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.alpha-cell {
+  flex: 0 0 70px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: #2d2d2d;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.alpha-cell:focus-within {
+  border-color: var(--accent);
+}
+
+.alpha-cell .num-input {
+  flex: 1 1 auto;
+  width: 100%;
+  background: transparent;
+}
+
+/* ===== 资源缓存视图 ===== */
+
+/* 资源树行（分组行 / 资源行共用基础样式） */
+.asset-row {
+  display: flex;
+  align-items: center;
+  height: var(--row-h);
+  padding-right: 8px;
+  padding-left: calc(8px + var(--depth, 0) * 14px);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.asset-row:hover {
+  background: var(--bg-hover);
+}
+
+.asset-row.selected {
+  background: var(--bg-selected);
+  color: #fff;
+}
+
+/* 分组行：类型名 + 数量 */
+.asset-group-row {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.asset-type {
+  margin-right: 6px;
+  color: var(--warn);
+}
+
+/* 资源行：名称 + 引用计数 */
+.asset-name {
+  flex: 0 0 auto;
+  margin-right: 8px;
+}
+
+.asset-ref {
+  margin-left: auto;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+/* 引用计数为 0 的资源（可能可释放）置灰 */
+.asset-row.zero-ref .asset-name {
+  color: var(--fg-dim);
+}
+
+.asset-children .asset-row:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* 资源详情头部 */
+.asset-detail-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #fff;
+  word-break: break-all;
+  margin-left: 4px;
+}
+
+/* 释放按钮 */
+.release-wrap {
+  margin-top: 14px;
+}
+
+.btn-release {
+  background: #3a2424;
+  border-color: #5a2d2d;
+  color: var(--error);
+}
+
+.btn-release:hover:not(:disabled) {
+  background: #4a2828;
+}
+
+.btn-release:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 资源视图顶部分组切换条 */
+.assets-subbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.subbar-label {
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+/* 分段按钮（类型 / Bundle） */
+.seg {
+  background: #2d2d2d;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.seg:hover {
+  color: var(--fg);
+}
+
+.seg.active {
+  background: #0e3a5c;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 资源行的次要信息（bundle 名 或 类型名） */
+.asset-sub {
+  margin-left: 4px;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
