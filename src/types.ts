@@ -110,12 +110,14 @@ export interface SerializedAsset {
   name: string;
   /** 资源类型（constructor.name，如 'Texture' / 'SpriteFrame'） */
   type: string;
-  /** 引用计数（asset._reference 兜底，0 表示无引用） */
+  /** 引用计数（asset._ref 兜底，公开 getter 为 refCount，0 表示无引用） */
   refCount: number;
   /** 依赖的其他资源 uuid 数量 */
   depCount: number;
   /** 所属 bundle 名（无法判定归属时为 '(unbundled)'） */
   bundle: string;
+  /** 估算的占用内存（字节）。仅对常见类型（Texture/Audio 等）精确估算，其余为 0 */
+  memory: number;
 }
 
 /** 资源序列化结果：扁平资源数组 + 按类型分组的映射 */
@@ -130,9 +132,59 @@ export interface AssetSnapshot {
   total: number;
 }
 
+/** 单个资源的预览图（懒加载，不进 SerializedAsset，避免快照体积膨胀） */
+export interface AssetPreview {
+  /** 资源 uuid */
+  uuid: string;
+  /** 原始纹理宽（SpriteFrame 为帧区域宽） */
+  width: number;
+  /** 原始纹理高（SpriteFrame 为帧区域高） */
+  height: number;
+  /** PNG dataURL（缩略图，maxDim≈256）；null 表示无法提取（压缩纹理/非图像源） */
+  dataUrl: string | null;
+}
+
 /** 资源释放结果 */
 export interface ReleaseResult {
   ok: boolean;
   reason?: 'NO_CC' | 'NOT_FOUND' | 'RELEASE_FAILED';
+}
+
+// ===== 动态图集（dynamicAtlasManager）相关类型 =====
+
+/** 动态图集内的子项（已合并的源 SpriteFrame） */
+export interface DynamicAtlasFrame {
+  /** SpriteFrame 名（可能为空） */
+  name: string;
+  /** 源纹理名（texture.name，常为空，回退用 constructor.name） */
+  textureName: string;
+  /** 源帧区域 */
+  rect: { x: number; y: number; width: number; height: number };
+  /** 源纹理 uuid（可能为空） */
+  uuid: string;
+}
+
+/** 单个动态图集 */
+export interface DynamicAtlas {
+  /** 序号（_atlases 索引） */
+  index: number;
+  /** 合并纹理宽 */
+  width: number;
+  /** 合并纹理高 */
+  height: number;
+  /** 估算占用内存（字节，用 FormatSize 算） */
+  memory: number;
+  /** 已合并的子项数 */
+  frameCount: number;
+  /** 子项列表 */
+  frames: DynamicAtlasFrame[];
+}
+
+/** 动态图集快照（独立于 AssetSnapshot，按需懒加载） */
+export interface DynamicAtlasSnapshot {
+  /** 是否启用（enabled=false 时 atlases 为空，前端显示占位） */
+  enabled: boolean;
+  /** 图集列表 */
+  atlases: DynamicAtlas[];
 }
 

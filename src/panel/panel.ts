@@ -1,9 +1,27 @@
-import { fetchAssets } from './assets-inspector';
-import { renderAssetDetails, renderAssetsTree, type GroupBy } from './assets-view';
+import { fetchAssetPreview, fetchAssets, fetchAtlasPreview, fetchDynamicAtlas } from './assets-inspector';
+import {
+  isPreviewable,
+  renderAssetDetails,
+  renderAssetsTree,
+  renderDynamicAtlasDetails,
+  renderDynamicAtlasTree,
+  type AssetSortBy,
+  type GroupBy,
+} from './assets-view';
 import { fetchSceneTree, setNodeField } from './cocos-inspector';
 import { renderDetails, type CommitHandler } from './details';
 import { countNodes, findNodeByUuid, renderTree } from './tree';
-import type { AssetSnapshot, NodeFieldPath, SerializedAsset, SerializedNode, TreeData } from '../types';
+import type {
+  AssetPreview,
+  AssetSnapshot,
+  DynamicAtlas,
+  DynamicAtlasFrame,
+  DynamicAtlasSnapshot,
+  NodeFieldPath,
+  SerializedAsset,
+  SerializedNode,
+  TreeData,
+} from '../types';
 
 type TabKind = 'nodes' | 'assets';
 
@@ -43,8 +61,18 @@ const expanded = new Set<string>();
 let assetSnap: AssetSnapshot | null = null;
 let selectedAssetUuid: string | null = null;
 let assetGroupBy: GroupBy = 'type';
+let assetSortBy: AssetSortBy = 'default';
 const expandedGroups = new Set<string>();
-const segButtons = document.querySelectorAll<HTMLButtonElement>('.seg');
+/** 预览图缓存：uuid → AssetPreview。懒加载，手动刷新时清空。 */
+const previewCache = new Map<string, AssetPreview>();
+/** 动态图集快照（独立于 assetSnap，切到该维度时懒拉取） */
+let dynamicAtlasSnap: DynamicAtlasSnapshot | null = null;
+/** 动态图集选中：{ atlasIndex, frameIndex }；frameIndex=-1 表示选中图集本身 */
+let selectedAtlas: { atlasIndex: number; frameIndex: number } | null = null;
+/** 动态图集预览缓存：图集 index → { dataUrl }（GPU 回读，懒加载） */
+const atlasPreviewCache = new Map<number, { dataUrl: string | null }>();
+const segButtons = document.querySelectorAll<HTMLButtonElement>('[data-groupby]');
+const sortButtons = document.querySelectorAll<HTMLButtonElement>('[data-sort]');
 
 // 轮询状态
 let polling = false;
@@ -115,9 +143,15 @@ function handleSelect(node: SerializedNode): void {
 // ===== 资源视图渲染 =====
 function rerenderAssetsTree(): void {
   if (!assetsTreeEl) return;
+  // dynamicAtlas 维度走独立渲染（数据结构是树形 atlas→frames）
+  if (assetGroupBy === 'dynamicAtlas') {
+    rerenderDynamicAtlasTree();
+    return;
+  }
   renderAssetsTree(assetsTreeEl, assetSnap, {
     filterText,
     groupBy: assetGroupBy,
+    sortBy: assetSortBy,
     expandedGroups,
     selectedUuid: selectedAssetUuid,
     onSelect: handleAssetSelect,
@@ -130,16 +164,83 @@ function rerenderAssetsTree(): void {
   });
 }
 
+// ===== 动态图集视图渲染（groupBy === 'dynamicAtlas'）=====
+function rerenderDynamicAtlasTree(): void {
+  if (!assetsTreeEl) return;
+  renderDynamicAtlasTree(assetsTreeEl, dynamicAtlasSnap, {
+    filterText,
+    expandedGroups,
+    selected: selectedAtlas,
+    onSelect: handleAtlasSelect,
+    onToggleGroup: (gKey) => {
+      if (expandedGroups.has(gKey)) expandedGroups.delete(gKey);
+      else expandedGroups.add(gKey);
+      rerenderDynamicAtlasTree();
+    },
+  });
+}
+
+function rerenderDynamicAtlasDetails(): void {
+  if (!assetDetailsEl) return;
+  let atlas: DynamicAtlas | null = null;
+  let frame: DynamicAtlasFrame | null = null;
+  if (selectedAtlas && dynamicAtlasSnap) {
+    atlas = dynamicAtlasSnap.atlases.find((a) => a.index === selectedAtlas!.atlasIndex) ?? null;
+    if (atlas && selectedAtlas.frameIndex >= 0) {
+      frame = atlas.frames[selectedAtlas.frameIndex] ?? null;
+    }
+  }
+  const preview = selectedAtlas ? atlasPreviewCache.get(selectedAtlas.atlasIndex) ?? null : null;
+  renderDynamicAtlasDetails(assetDetailsEl, atlas, frame, () => void refresh(), preview);
+}
+
+/** 选中图集子项：onSelect 传 atlasIndex + frameIndex */
+function handleAtlasSelect(atlasIndex: number, frameIndex: number): void {
+  selectedAtlas = { atlasIndex, frameIndex };
+  rerenderDynamicAtlasTree();
+  rerenderDynamicAtlasDetails();
+  // 图集预览懒加载（GPU 回读）；缓存未命中时异步拉取，命中直接渲染
+  if (!atlasPreviewCache.has(atlasIndex)) {
+    void loadAtlasPreview(atlasIndex);
+  }
+}
+
+/** 异步拉取图集预览图，存入缓存后重渲染（仅当用户仍选中该图集时） */
+async function loadAtlasPreview(index: number): Promise<void> {
+  const p = await fetchAtlasPreview(index);
+  atlasPreviewCache.set(index, { dataUrl: p?.dataUrl ?? null });
+  // 防竞态：用户可能在 eval 完成前切换了选中，避免渲染陈旧预览
+  if (selectedAtlas?.atlasIndex === index) rerenderDynamicAtlasDetails();
+}
+
 function rerenderAssetDetails(): void {
   if (!assetDetailsEl) return;
+  // dynamicAtlas 维度走独立详情渲染
+  if (assetGroupBy === 'dynamicAtlas') {
+    rerenderDynamicAtlasDetails();
+    return;
+  }
   const asset = selectedAssetUuid ? findAsset(assetSnap, selectedAssetUuid) : null;
-  renderAssetDetails(assetDetailsEl, asset, () => void refresh());
+  const preview = asset && isPreviewable(asset.type) ? previewCache.get(asset.uuid) ?? null : null;
+  renderAssetDetails(assetDetailsEl, asset, () => void refresh(), preview);
 }
 
 function handleAssetSelect(asset: SerializedAsset): void {
   selectedAssetUuid = asset.uuid;
   rerenderAssetsTree();
   rerenderAssetDetails();
+  // 可预览类型且缓存未命中：懒加载预览图
+  if (isPreviewable(asset.type) && !previewCache.has(asset.uuid)) {
+    void loadAssetPreview(asset.uuid);
+  }
+}
+
+/** 异步拉取单个资源的预览图，存入缓存后重渲染（仅当用户仍选中同一资源时） */
+async function loadAssetPreview(uuid: string): Promise<void> {
+  const preview = await fetchAssetPreview(uuid);
+  if (preview) previewCache.set(uuid, preview);
+  // 校验：用户可能在 eval 完成前切换了选中，避免渲染陈旧预览
+  if (selectedAssetUuid === uuid) rerenderAssetDetails();
 }
 
 function findAsset(snap: AssetSnapshot | null, uuid: string): SerializedAsset | null {
@@ -223,6 +324,9 @@ async function refresh(): Promise<void> {
     if (activeTab === 'nodes') {
       await refreshNodes(true);
     } else {
+      // 手动刷新：清空预览缓存（纹理/动态图集可能已变），轮询路径不清空
+      previewCache.clear();
+      atlasPreviewCache.clear();
       await refreshAssets();
     }
     lastManualStatus = 'ok';
@@ -248,8 +352,13 @@ async function refreshNodes(resetSelection: boolean): Promise<void> {
   setStatus(polling ? '轮询中' : '已连接', 'ok');
 }
 
-/** 拉取资源快照（智能保留选中） */
+/** 拉取资源快照（智能保留选中）；dynamicAtlas 维度时改拉动态图集 */
 async function refreshAssets(): Promise<void> {
+  // 动态图集维度：拉取 dynamicAtlasSnap，数据结构与 assetSnap 不同，单独处理
+  if (assetGroupBy === 'dynamicAtlas') {
+    await refreshDynamicAtlas();
+    return;
+  }
   const fresh = await fetchAssets();
   assetSnap = fresh;
   if (selectedAssetUuid && !findAsset(fresh, selectedAssetUuid)) selectedAssetUuid = null;
@@ -258,6 +367,25 @@ async function refreshAssets(): Promise<void> {
   rerenderAssetsTree();
   if (assetsTreeEl) assetsTreeEl.scrollTop = scrollTop;
   setCount(fresh.total);
+  if (!isAssetDetailsEditing()) rerenderAssetDetails();
+  setStatus(polling ? '轮询中' : '已连接', 'ok');
+}
+
+/** 拉取动态图集快照（智能保留选中） */
+async function refreshDynamicAtlas(): Promise<void> {
+  const fresh = await fetchDynamicAtlas();
+  dynamicAtlasSnap = fresh;
+  // 选中校验：图集/子项已不存在时清空
+  if (selectedAtlas) {
+    const atlas = fresh.atlases.find((a) => a.index === selectedAtlas!.atlasIndex);
+    if (!atlas || (selectedAtlas.frameIndex >= 0 && !atlas.frames[selectedAtlas.frameIndex])) {
+      selectedAtlas = null;
+    }
+  }
+  const scrollTop = assetsTreeEl?.scrollTop ?? 0;
+  rerenderAssetsTree();
+  if (assetsTreeEl) assetsTreeEl.scrollTop = scrollTop;
+  setCount(fresh.atlases.length);
   if (!isAssetDetailsEditing()) rerenderAssetDetails();
   setStatus(polling ? '轮询中' : '已连接', 'ok');
 }
@@ -394,12 +522,31 @@ function bindGroupBy(): void {
   segButtons.forEach((b) => {
     b.addEventListener('click', () => {
       const g = b.dataset.groupby;
-      if (g !== 'type' && g !== 'bundle') return;
+      if (g !== 'type' && g !== 'bundle' && g !== 'dynamicAtlas') return;
       if (g === assetGroupBy) return;
       assetGroupBy = g;
       segButtons.forEach((x) => x.classList.toggle('active', x.dataset.groupby === g));
-      // 切换维度时清空展开记忆（两套维度的展开键不通用）
+      // 切换维度时清空展开记忆（各维度展开键前缀不同：type:/bundle:/atlas:）
       expandedGroups.clear();
+      // dynamicAtlas 维度：切到时懒拉取（数据源不同，且渲染期实时变化）
+      if (g === 'dynamicAtlas') {
+        void refreshDynamicAtlas();
+      } else {
+        rerenderAssetsTree();
+      }
+    });
+  });
+}
+
+// ===== 组内排序切换（资源视图：默认 / 内存）=====
+function bindSortBy(): void {
+  sortButtons.forEach((b) => {
+    b.addEventListener('click', () => {
+      const s = b.dataset.sort;
+      if (s !== 'default' && s !== 'memory') return;
+      if (s === assetSortBy) return;
+      assetSortBy = s;
+      sortButtons.forEach((x) => x.classList.toggle('active', x.dataset.sort === s));
       rerenderAssetsTree();
     });
   });
@@ -428,6 +575,7 @@ bindTabs();
 bindSearch();
 bindPollControls();
 bindGroupBy();
+bindSortBy();
 bindSplitter(splitterEl, layoutEl, SPLIT_KEY, DEFAULT_SPLIT);
 bindSplitter(assetsSplitterEl, viewAssets, 'cocos-devtools:assets-split', 45);
 bindKeys();

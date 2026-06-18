@@ -33,21 +33,27 @@
 ### 资源缓存 Tab
 
 读取 `cc.assetManager.assets`（已加载资源缓存），以**分组树**展示。资源视图顶部可切换分组维度：
-**按类型** 或 **按 Bundle**。
+**按类型**、**按 Bundle** 或 **动态图集**。
 
 ```
-按类型：                      按 Bundle：
-📁 Texture (12)              📦 main (45)
-   ├─ hero.png  @resources      ├─ hero.png  Texture
-   ├─ bg.png    @main           ├─ bg.png    Texture
-📁 SpriteFrame (8)          📦 resources (30)
-📁 AudioClip (3)            📦 (unbundled) (5)
+按类型：                            按 Bundle：
+📁 Texture (12) · 8.3 MB          📦 main (45) · 12.4 MB
+   ├─ hero.png  @resources  2.1 MB    ├─ hero.png  Texture  2.1 MB
+   ├─ bg.png    @main     1024 KB    ├─ bg.png    Texture  1024 KB
+📁 SpriteFrame (8)              📦 resources (30) · 4.1 MB
+📁 AudioClip (3) · 560 KB        📦 (unbundled) (5)
 ```
 
 - 顶层 = 分组键（类型 `constructor.name` / 或所属 bundle 名），按数量排序；展开看组内资源
-- 每个资源显示名称 + 次要信息（按类型分组时显示 `@bundle`，按 bundle 分组时显示类型）+ 引用计数
+- 分组行在数量后追加**该组总占用内存**（如 `· 8.3 MB`）；无法估算的组只显示数量
+- 每个资源显示名称 + 次要信息（按类型分组时显示 `@bundle`，按 bundle 分组时显示类型）+ 引用计数 + **估算占用内存**
+- **占用内存**：按资源类型估算（Texture=宽×高×字节/像素、AudioBuffer=样本数×声道×4、RenderTexture=宽×高×4）；不可估算的类型（Material/JSON/Font 等）显示 `—`
+- **按内存排序**：工具条「排序」段控件可切「默认（加载顺序）/ 内存（组内按内存降序）」，memory=0 的资源沉到组底
 - 引用计数为 0 的资源置灰（可能可释放）；`(unbundled)` 组是无法判定 bundle 归属的资源，永远排在最后
-- **资源详情面板**：点选资源显示 类型/uuid/**bundle**/引用计数/依赖数
+- **资源详情面板**：点选资源显示 类型/uuid/**bundle**/引用计数/依赖数/**估算内存**
+- **纹理预览**：选中 **Texture/Texture2D/TextureCube/SpriteFrame** 时，详情顶部显示缩略图（透明区用棋盘格背景，便于看清 alpha 通道）；SpriteFrame 按 `_rect` 裁剪只显示帧区域。压缩纹理（ASTC/ETC2 等非 HTML 图源）显示「无法提取预览」
+- **动态图集维度**：读取 `cc.internal.dynamicAtlasManager._atlases`，两级树展示——图集行（`🗺️ Atlas #N · 2048×2048 · 内存`）展开后是已合并的 SpriteFrame 子项（名称 + 源纹理名 + 帧区域）；图集按内存降序；项目未启用动态图集时显示占位；**清空按钮**调 `dynamicAtlasManager.reset()` 整包释放（引擎无法单个释放）
+- **动态图集预览**：选中图集时，详情顶部显示合并大纹理预览（棋盘格背景，能看到图集合并了哪些图）；GPU 回读失败时显示提示
 - **释放资源按钮**：调用 `cc.assetManager.releaseAsset(asset)` 释放该资源（排查内存泄漏用）
 - 支持搜索（资源名/类型/bundle）、轮询、左右分栏
 
@@ -71,9 +77,36 @@
 能见到私有 `_children`。
 
 资源缓存 Tab 同样用 `inspectedWindow.eval` 遍历 `cc.assetManager.assets`（ICache<Asset>，
-有 forEach），每项提取 uuid/name/类型/引用计数/依赖数/**bundle 归属**。引用计数读 `asset._reference`（3.x
-release-manager 用此字段）。bundle 归属通过遍历所有 bundle 的 `config.assetInfos` 建倒排索引判定。
+有 forEach），每项提取 uuid/name/类型/引用计数/依赖数/**bundle 归属**/**估算内存**。引用计数读 `asset._ref`（3.x
+release-manager 用此字段，公开 getter 为 `refCount`）。bundle 归属通过遍历所有 bundle 的 `config.assetInfos` 建倒排索引判定。
+**内存估算**：Cocos 资源没有官方"占用字节"API，扩展按 `constructor.name` 分发——Texture 优先用引擎
+`cc.gfx.FormatSize(format, w, h, 1)`（正确处理压缩纹理块大小），format 取纹理公开的 `getPixelFormat()`
+（即 `_format`，PixelFormat 枚举）；不可用时回退 `width×height×bytesPerPixel(format)`（`bytesPerPixel` 查引擎内置
+`cc.gfx.FormatInfos` 表的 `size` 字段）；RenderTexture 用 `width×height×4`，AudioBuffer 用 `length×声道数×4`
+（f32 采样），AudioClip 汇总内部 `_buffers`；其余类型（Material/JSON/Font/Mesh 等）返回 0（不可估算）。
 释放资源时按 uuid 取出 asset 再调 `releaseAsset`。
+
+**纹理预览（懒加载）**：选中 Texture/SpriteFrame 时，扩展用 `inspectedWindow.eval` 单独执行一段脚本
+（`fetchAssetPreview`），按 uuid 取出资源后：SpriteFrame 先经 `texture` 取底层纹理并读 `_rect` 裁剪区域，
+Texture 直接用本体；再用多条路径兜底取 HTML 图像源（`getHtmlElementObj()` → `image.data` → `mipmaps[0].data`），
+画到一张 maxDim=256 的临时 canvas 上 `toDataURL('image/png')` 回传。**不在序列化快照里全量带图**，
+避免每次刷新/轮询都为每个纹理生成 dataURL；提取结果缓存到面板级 `Map<uuid, AssetPreview>`，手动刷新时清空
+（纹理可能已变），轮询不清空。压缩纹理（ASTC/ETC2/PVRTC）level-0 非 HTML 元素，所有路径拿不到源，
+返回 `dataUrl:null` 由前端显示「无法提取预览」。
+
+**动态图集维度（懒加载）**：切到「动态图集」维度时，扩展用 `inspectedWindow.eval` 单独执行一段脚本
+（`fetchDynamicAtlas`），读取 `cc.internal.dynamicAtlasManager._atlases`。每个图集提取合并大纹理
+（`_texture`）的 `width/height/getPixelFormat()` 算内存（恒为 RGBA8888，即 `width×height×4`），并遍历
+`_innerSpriteFrames` 提取已合并的源 SpriteFrame（名称 + 源纹理名 + `rect` 帧区域）。动态图集渲染期实时变化，
+**不进资源快照**，仅在切到该维度/手动刷新/轮询时按需拉取。引擎仅提供 `reset()` 整包清空（无法单个释放），
+由详情面板的「清空所有动态图集」按钮触发。项目未启用（`enabled=false`）时显示占位。
+
+**动态图集预览（GPU 回读，懒加载）**：动态图集纹理是 GPU 端动态合成的（`drawTextureAt` → `copyTexImagesToTexture`），
+**没有 HTML 图像源**（`getHtmlElementObj()` 返回 null），无法复用普通纹理的预览路径。选中图集时扩展单独执行一段
+脚本（`fetchAtlasPreview`）：`atlas._texture.getGFXTexture()` 拿 GFX 纹理 → `cc.director.root.device.copyTextureToBuffers`
+回读 RGBA8 ArrayBuffer → 包成 `ImageData` → 画到 256px 缩略 canvas → `toDataURL`。结果缓存到面板级
+`Map<index, {dataUrl}>`，手动刷新清空（动态图集会变），轮询不清空。GPU 回读失败（个别平台/格式不支持）时
+返回 `dataUrl:null`，由前端显示「无法提取预览（GPU 回读失败）」。
 
 组件属性走硬编码白名单（Sprite/Label/UITransform/UIOpacity/Button/Layout/Widget/Mask/Animation
 等），命中白名单的组件会枚举常用属性；未命中的组件只列类名。属性值经净化：Vec3/Size/Rect/Color
@@ -162,6 +195,13 @@ npm run dev   # 等同 vite build --watch，文件改动后自动重新构建到
 | UITransform 区没出现 | 该节点无 UITransform 组件（3D 节点） |
 | 组件只显示类名没有属性 | 该组件不在硬编码白名单内；可在 `cocos-inspector.ts` 的 `COMP_PROPS` 里补充 |
 | 改完值刷新后又变回去 | 游戏脚本每帧覆盖了该值（如动画/Tween 在持续修改），非扩展问题 |
+| 资源内存列显示 `—` | 该资源类型不可估算（Material/JSON/Font 等），仅 Texture/RenderTexture/Audio 等精确估算 |
+| 内存值与实际偏差大 | 估算用引擎 `FormatSize` 算，压缩纹理按块计费正确；但仍不含 mipmap 链额外占用（mipmap 总量约原图 1.33 倍） |
+| 选中 Texture/SpriteFrame 没显示预览图 | 预览是懒加载，选中后异步提取需几百毫秒；压缩纹理（ASTC/ETC2）无法提取会显示「无法提取预览」 |
+| 预览图与实际纹理不符 | 纹理在引擎侧已更新但扩展缓存未刷新，点「刷新」按钮清空预览缓存后重新选中 |
+| 动态图集维度显示「未启用」 | 项目未开启动态图集（`cc.internal.dynamicAtlasManager.enabled=false`），需在项目设置开启 |
+| 动态图集内存是整张大图占用 | 如 2048×2048 显示约 16MB（RGBA8），即使只塞了 1 张子图，GPU 已分配整张画布 |
+| 动态图集选中后显示「GPU 回读失败」 | `copyTextureToBuffers` 在当前 WebGL 环境/纹理格式不支持；少数平台限制，可切回普通纹理维度查看 |
 
 ## 快捷键
 
@@ -193,7 +233,7 @@ npm run dev   # 等同 vite build --watch，文件改动后自动重新构建到
 可编辑 Node 属性（active/name/position/rotation/scale/layer）、可编辑 UITransform、
 可编辑组件属性（Sprite/Label/RichText/Widget/Layout/UIOpacity，含拾色器/下拉/复选框/文本）、
 每个组件 enable 复选框、资源引用字段只读；
-资源缓存（按类型分组树、引用计数显示、资源详情、释放资源按钮）；
+资源缓存（按类型/bundle/**动态图集**分组树、引用计数显示、**估算占用内存**、**按内存排序**、**Texture/SpriteFrame 预览图**、资源详情、释放资源按钮）；
 搜索、手动刷新 + 智能轮询刷新（按当前 Tab）、手动展开跨刷新保持。
 
 暂不做：spriteFrame/font 等资源引用的编辑、自动轮询刷新、Cocos 2.x 专门适配

@@ -737,7 +737,7 @@ body {
   color: var(--warn);
 }
 
-/* 资源行：名称 + 引用计数 */
+/* 资源行：名称 + 引用计数 + 内存 */
 .asset-name {
   flex: 0 0 auto;
   margin-right: 8px;
@@ -747,6 +747,15 @@ body {
   margin-left: auto;
   color: var(--fg-dim);
   font-size: 11px;
+}
+
+/* 内存列：紧贴 ref 左侧（DOM 顺序为 ref → mem，ref 用 margin-left:auto 顶右） */
+.asset-mem {
+  margin-left: 10px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  min-width: 48px;
+  text-align: right;
 }
 
 /* 引用计数为 0 的资源（可能可释放）置灰 */
@@ -788,6 +797,68 @@ body {
   cursor: default;
 }
 
+/* 纹理预览图（详情面板顶部，仅 Texture/SpriteFrame） */
+.detail-preview {
+  margin: 8px 0 14px;
+  text-align: center;
+}
+
+.detail-preview-img {
+  max-width: 100%;
+  max-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  image-rendering: pixelated;
+  /* 棋盘格背景：看清透明通道（alpha） */
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.detail-preview-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.detail-preview-empty {
+  display: block;
+  margin: 8px 0;
+  color: var(--fg-dim);
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* ===== 动态图集视图 ===== */
+
+/* 图集行：复用 .asset-row 基础样式，meta 显示尺寸+内存+帧数 */
+.atlas-row {
+  cursor: pointer;
+}
+
+/* 图集子项行：源 SpriteFrame 名 + 源纹理名 + 帧区域 */
+.atlas-frame-row .asset-ref {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 动态图集详情子标题（选中子项区块） */
+.detail-sub-header {
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* 清空动态图集按钮（复用 .btn-release 红色样式，额外类便于区分） */
+.atlas-reset-btn {
+  white-space: nowrap;
+}
+
 /* 资源视图顶部分组切换条 */
 .assets-subbar {
   flex: 0 0 auto;
@@ -824,6 +895,15 @@ body {
   background: #0e3a5c;
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* 分组/排序控件之间的分隔条 */
+.subbar-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border);
 }
 
 /* 资源行的次要信息（bundle 名 或 类型名） */
