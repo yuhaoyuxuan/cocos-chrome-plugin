@@ -43,8 +43,8 @@ const EDITABLE_FIELDS: Record<string, FieldSpec[]> = { Sprite:[...], Label:[...]
 
 ### 5. 两种刷新路径分离
 - 手动刷新（按钮/R）：重置选中，全新状态
-- 轮询刷新（可选开关 + 间隔档位）：**智能保留状态**——保留选中、保留展开、
-  保留滚动位置、用户正在编辑输入框时跳过本次详情刷新
+- 轮询刷新（可选开关 + 间隔档位）：**智能保留状态**——保留选中、保留展开（节点树 `expanded` Set +
+  详情面板 `expandedComps` Set）、保留滚动位置、用户正在编辑输入框时跳过本次详情刷新
 - 轮询按**当前激活 Tab** 工作
 
 ## 文件结构与职责
@@ -64,6 +64,7 @@ src/
     panel.css                   深色主题 + Tab + 分栏 + Inspector 控件 + 预览图
     tree.ts                     节点树渲染（选中/过滤/折叠保持/选中路径展开）
     details.ts                  节点详情：EDITABLE_FIELDS注册表 + 通用renderComponent
+                                + 组件展开状态持久化(expandedComps Set, 轮询刷新保持)
     cocos-inspector.ts          节点序列化脚本 + 字段写回脚本(setNodeField)
     assets-view.ts              资源视图：分组树(类型/bundle/动态图集)+详情+预览图+释放按钮
     assets-inspector.ts         资源序列化脚本 + 释放脚本 + 预览图提取脚本
@@ -133,6 +134,14 @@ src/
    addEventListener('keydown') 会退化为 Event 参数，需 `as HTMLElement` 窄化。
 4. **叶子节点也要绑事件**：树渲染时无子节点不能 `return` 早退，否则行没绑定点击事件
    无法选中——选中和折叠逻辑要解耦。
+5. **详情面板组件展开状态必须持久化到模块级集合**：`details.ts` 的 `renderComponent` 里
+   组件展开/折叠状态如果只存在 DOM 的 `body.hidden` 上，轮询刷新时 `rerenderDetails()` →
+   `renderDetails()` → `container.replaceChildren()` 整体重建 DOM，每个组件都以 `body.hidden=true`
+   重新创建，刚展开的组件会被重新折叠。`isDetailsEditing()` 只挡 input 获焦的情况，点组件头部
+   （仅展开、无 input 获焦）挡不住。正确做法：用一个模块级 `expandedComps: Set<string>`（key=组件名）
+   持久化展开状态，初始 `body.hidden` 读自该集合，点击头部时同步 add/delete。**切换到不同节点时
+   要 `expandedComps.clear()`**（用 `lastRenderedUuid` 守卫），否则上一节点展开的组件会串到新节点
+   （节点 A 的 Sprite 展开了，选节点 B 的 Sprite 不该被自动展开）。与节点树的 `expanded` Set 同理。
 
 ## 已实现能力清单（当前状态）
 
@@ -148,6 +157,7 @@ src/
   - Layout：type/spacing/padding
   - UIOpacity：opacity
 - 每个组件头部 enable 复选框
+- **组件展开/折叠跨轮询刷新保持**（模块级 `expandedComps` Set，切换节点清空避免串台）
 - 资源引用字段(spriteFrame/font)只读
 
 ### 资源缓存 Tab
@@ -200,6 +210,9 @@ src/
 - **（新功能）** 动态图集预览图（GPU 回读合并大纹理）：动态图集纹理无 HTML 源，走
   `getGFXTexture` → `copyTextureToBuffers` 回读 RGBA8 → ImageData → canvas；懒加载 + 面板缓存；
   回读失败显示提示
+- **（修bug）** 轮询刷新时详情面板组件展开状态丢失：组件展开状态只存在 DOM 的 `body.hidden` 上，
+  轮询重建 DOM 后全部折叠。改用模块级 `expandedComps: Set<string>` 持久化（key=组件名），
+  切换节点时清空避免串台；与节点树 `expanded` Set 同理
 
 ## 已知限制 / 后续可做
 

@@ -13,6 +13,16 @@ interface RenderCtx {
 
 let currentCtx: RenderCtx | null = null;
 
+/** 跨重渲染持久化的组件展开状态（key = 组件名）。
+ *  详情面板在轮询刷新时整体重建 DOM（renderDetails → replaceChildren），
+ *  组件的展开/折叠若只存在 DOM 的 body.hidden 上会丢失，导致已展开的组件被重新折叠。
+ *  这里把它提到模块级集合，与节点树的 expanded Set 同理。 */
+const expandedComps = new Set<string>();
+
+/** 上一次渲染详情的节点 uuid；切换到不同节点时清空 expandedComps，
+ *  让每个节点的组件折叠状态各自独立（而不是按组件名跨节点串台）。 */
+let lastRenderedUuid: string | null = null;
+
 // ===== 组件可编辑字段注册表：类名 → 字段描述数组 =====
 // 写回路径前缀 = 类名小写（sprite/label/...）；初始值来自序列化的 props。
 const EDITABLE_FIELDS: Record<string, FieldSpec[]> = {
@@ -71,8 +81,15 @@ export function renderDetails(container: HTMLElement, node: SerializedNode | nul
   container.replaceChildren();
   if (!node) {
     currentCtx = null;
+    lastRenderedUuid = null;
+    expandedComps.clear();
     container.appendChild(emptyHint('在左侧树中选择一个节点以查看详情'));
     return;
+  }
+  // 切换到不同节点：重置组件展开记忆，避免上一节点的展开状态串到新节点
+  if (lastRenderedUuid !== node.uuid) {
+    expandedComps.clear();
+    lastRenderedUuid = node.uuid;
   }
   currentCtx = { uuid: node.uuid, commit };
 
@@ -169,15 +186,16 @@ function renderComponent(c: ComponentInfo): HTMLElement {
   enableWrap.appendChild(enableInput);
   head.appendChild(enableWrap);
 
-  const twisty = el('span', 'twisty', '▶');
+  const twisty = el('span', 'twisty', expandedComps.has(c.name) ? '▼' : '▶');
   twisty.setAttribute('aria-hidden', 'true');
   head.appendChild(twisty);
   head.appendChild(el('span', 'comp-name', c.name));
   wrap.appendChild(head);
 
-  // 展开区
+  // 展开区：初始状态读自 expandedComps，使轮询重建后能保持用户上次展开的组件
   const body = el('div', 'comp-body');
-  body.hidden = true;
+  body.hidden = !expandedComps.has(c.name);
+  if (!body.hidden) wrap.classList.add('expanded');
   wrap.appendChild(body);
 
   const fields = EDITABLE_FIELDS[c.name] ?? [];
@@ -203,11 +221,14 @@ function renderComponent(c: ComponentInfo): HTMLElement {
     body.appendChild(table);
   }
 
-  // 点击头部展开/折叠（复选框点击已阻止冒泡）
+  // 点击头部展开/折叠（复选框点击已阻止冒泡）；状态同步到 expandedComps 以跨刷新保持
   head.style.cursor = 'pointer';
   head.addEventListener('click', () => {
     body.hidden = !body.hidden;
     twisty.textContent = body.hidden ? '▶' : '▼';
+    wrap.classList.toggle('expanded', !body.hidden);
+    if (body.hidden) expandedComps.delete(c.name);
+    else expandedComps.add(c.name);
   });
 
   // enable 切换后视觉同步
